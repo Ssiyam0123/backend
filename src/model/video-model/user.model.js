@@ -3,11 +3,16 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 const userSchema = new Schema(
   {
-    username: {
+    userName: {
       type: String,
       required: true,
       trim: true,
       index: true,
+    },
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
     },
     email: {
       type: String,
@@ -17,10 +22,14 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: true,
+      // min: [6, "password must be less then 6 characters"],
     },
     avatar: {
-      trype: String,
-      required: true,
+      type: String,
+      // required: true,
+    },
+    coverImage: {
+      type: String,
     },
     watchList: [
       {
