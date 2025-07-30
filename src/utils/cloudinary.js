@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import { env } from "process";
 
 cloudinary.config({
   cloud_name: 'ds4hwq3hb',
