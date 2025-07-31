@@ -4,6 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../model/video-model/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import generateAccessTokenAndRefreshToken from "../utils/generateAccessTokenAndRefreshToken.js";
+import jwt from "jsonwebtoken"
 
 const registerUser = asyncHandler(async (req, res) => {
   const { fullName, email, userName, password } = req.body;
@@ -65,7 +66,7 @@ const registerUser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { email, userName, password } = req.body;
 
-  if (!email || (!userName && !password)) {
+  if (!password && (!userName || !email)) {
     throw new ApiError(400, "email or username and password is requied");
   }
 
@@ -128,4 +129,37 @@ const logOutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "user logged out successfully"));
 });
 
-export { registerUser, loginUser, logOutUser };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incommingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+   if (!incommingAccessToken) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const decodedToken = jwt.verify(incommingRefreshToken, process.env.ACCESS_TOKEN_SECRET);
+
+  const user = await User.findById(decodedToken?._id);
+
+  if (!user) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  if (incommingRefreshToken !== user.accessToken) {
+    throw new ApiError(401, "Unauthorized access");
+  }
+
+  const { accessToken, refreshToken } =
+    await generateAccessTokenAndRefreshToken(user?._id);
+
+  const option = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+  .status(200)
+  .cookie("refreshToken", refreshToken, option)
+  .cookie("accessToken", accessToken, option)
+  .json(new ApiResponse(200, {accessToken, refreshToken}, "Access token refreshed successfully"));
+});
+
+export { registerUser, loginUser, logOutUser, refreshAccessToken };
