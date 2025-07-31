@@ -22,11 +22,11 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: true,
-      // min: [6, "password must be less then 6 characters"],
+      minLength: [6, "password must be geter then 6 characters"],
     },
     avatar: {
       type: String,
-      // required: true,
+      required: true,
     },
     coverImage: {
       type: String,
