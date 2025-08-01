@@ -4,7 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { User } from "../model/video-model/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import generateAccessTokenAndRefreshToken from "../utils/generateAccessTokenAndRefreshToken.js";
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
 const registerUser = asyncHandler(async (req, res) => {
   const { fullName, email, userName, password } = req.body;
@@ -130,12 +130,16 @@ const logOutUser = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incommingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
-   if (!incommingAccessToken) {
+  const incommingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken;
+  if (!incommingAccessToken) {
     throw new ApiError(401, "Unauthorized access");
   }
 
-  const decodedToken = jwt.verify(incommingRefreshToken, process.env.ACCESS_TOKEN_SECRET);
+  const decodedToken = jwt.verify(
+    incommingRefreshToken,
+    process.env.ACCESS_TOKEN_SECRET
+  );
 
   const user = await User.findById(decodedToken?._id);
 
@@ -156,10 +160,167 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
   };
 
   return res
-  .status(200)
-  .cookie("refreshToken", refreshToken, option)
-  .cookie("accessToken", accessToken, option)
-  .json(new ApiResponse(200, {accessToken, refreshToken}, "Access token refreshed successfully"));
+    .status(200)
+    .cookie("refreshToken", refreshToken, option)
+    .cookie("accessToken", accessToken, option)
+    .json(
+      new ApiResponse(
+        200,
+        { accessToken, refreshToken },
+        "Access token refreshed successfully"
+      )
+    );
 });
 
-export { registerUser, loginUser, logOutUser, refreshAccessToken };
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  const user = await User.findById(req?.user._id).select(
+    "-password -refreshToken"
+  );
+
+  if (!user) {
+    throw new ApiError(404, "unauthorized access");
+  }
+
+  const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
+
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Current password is incorrect");
+  }
+
+  user.password = newPassword;
+  await user.save({ validateBeforeSave: false });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"));
+});
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+});
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+  const { userName, email } = req.body;
+
+  const updatedRessult = await User.findByIdAndUpdate(
+    req?.user._id,
+    {
+      userName,
+      email,
+    },
+    {
+      new: true,
+    }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        updatedRessult,
+        "Account details updated successfully"
+      )
+    );
+});
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  const avatarLocalPath = req?.files?.path;
+
+  if (!avatarLocalPath) {
+    throw new ApiError(400, "Avatar file is required");
+  }
+
+  const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+  const newRes = await User.findByIdAndUpdate(req?.user._id, {
+    $set: {
+      avatar: avatar,
+    },
+  }).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, newRes, "Avatar updated successfully"));
+});
+
+const updateUserCover = asyncHandler(async (req, res) => {
+  const coverLocalPath = req?.files?.path;
+
+  if (!coverLocalPath) {
+    throw new ApiError(400, "Avatar file is required");
+  }
+
+  const coverImage = await uploadOnCloudinary(coverLocalPath);
+
+  const newRes = await User.findByIdAndUpdate(req?.user._id, {
+    $set: {
+      coverImage,
+    },
+  }).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, newRes, "Avatar updated successfully"));
+});
+
+
+const channel = asyncHandler(async(req,res)=>{
+  const userName = req.params.userName;
+
+  await User.aggregate([
+    {
+      $match : { userName }
+    },
+    {
+      $lookup : {
+        from : "subscriptions",
+        localField : "_id",
+        foreignField : "channel",
+        as : "subscribers"
+      }
+    },
+    {
+      $lookup : {
+        from : "subscriptions",
+        localField : "_id",
+        foreignField : "subscriber",
+        as : "subscribedTo"
+      }
+    },
+    {
+      $addFields : {
+        subscribersCount : {
+          $size : "$subscribers"
+        },
+        channelSubscribedToCount : {
+          $size : "$subscribedTo"
+        },
+        isSubscribed : {
+          $cond : {
+            if : {$in : [req.user._id, "$subscribers.subscriber"]},
+            then : true,
+            else : false
+          }
+        }
+      }
+    }
+  ])
+})
+
+
+export {
+  registerUser,
+  loginUser,
+  logOutUser,
+  refreshAccessToken,
+  changeCurrentPassword,
+  getCurrentUser,
+  updateAccountDetails,
+  updateUserAvatar,
+  updateUserCover,
+};
